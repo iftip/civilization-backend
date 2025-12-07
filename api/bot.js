@@ -102,8 +102,8 @@ export default async function handler(req, res) {
     await sendMessage(chatId, msg);
   }
 
-  // 4. /city
-  if (text.startsWith("/city")) {
+  // 4. /city  (FIXED VERSION)
+  if (text === "/city" || text.startsWith("/city@")) {
     const { data } = await supabase
       .from("groups")
       .select("name, bricks")
