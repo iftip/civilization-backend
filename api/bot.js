@@ -1,10 +1,3 @@
-This is the COMPLETE, FINAL FILE. It includes everything:
- * War (/attack <ID> with Cooldown)
- * Economy (/buy market)
- * Defense (/buy wall - Reduces damage by 50%)
- * Images (Correct .jpg logic)
- * Stability (No crashes)
-Copy and paste this ENTIRE block into your api/bot.js file.
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase Connection
@@ -177,4 +170,3 @@ export default async function handler(req, res) {
 
   return res.status(200).json({ ok: true });
 }
-
