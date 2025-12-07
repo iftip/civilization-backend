@@ -46,20 +46,19 @@ async function sendPhoto(chatId, photoUrl, caption = "") {
 // Level name + image based on bricks
 function getCity(bricks) {
   if (bricks < 10)
-    return { name: "⛺ Camp", img: "https://i.imgur.com/8Qz5K0P.png" };
+    return { name: "⛺ Camp", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/camp.jpg" };
 
   if (bricks < 50)
-    return { name: "🛖 Village", img: "https://i.imgur.com/X2f3s9L.png" };
+    return { name: "🛖 Village", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/village.jpg" };
 
   if (bricks < 100)
-    return { name: "🏠 Town", img: "https://i.imgur.com/7dP9k2m.png" };
+    return { name: "🏠 Town", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/town.jpg" };
 
   if (bricks < 500)
-    return { name: "🏙️ City", img: "https://i.imgur.com/e4R3v8K.png" };
+    return { name: "🏙️ City", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/city.jpg" };
 
-  return { name: "🏰 Kingdom", img: "https://i.imgur.com/Z9k4pLm.png" };
+  return { name: "🏰 Kingdom", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/city.jpg" };
 }
-
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(200).json({ ok: true });
 
