@@ -46,18 +46,18 @@ async function sendPhoto(chatId, photoUrl, caption = "") {
 // Level name + image based on bricks
 function getCity(bricks) {
   if (bricks < 10)
-    return { name: "⛺ Camp", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/camp.jpg" };
+    return { name: "⛺ Camp", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/Camp.jpg" };
 
   if (bricks < 50)
-    return { name: "🛖 Village", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/village.jpg" };
+    return { name: "🛖 Village", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/Village.jpg" };
 
   if (bricks < 100)
-    return { name: "🏠 Town", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/town.jpg" };
+    return { name: "🏠 Town", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/Town.jpg" };
 
   if (bricks < 500)
-    return { name: "🏙️ City", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/city.jpg" };
+    return { name: "🏙️ City", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/City.jpg" };
 
-  return { name: "🏰 Kingdom", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/city.jpg" };
+  return { name: "🏰 Kingdom", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/City.jpg" };
 }
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(200).json({ ok: true });
