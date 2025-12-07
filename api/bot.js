@@ -66,6 +66,7 @@ function getCity(bricks) {
 }
 
 export default async function handler(req, res) {
+
   if (req.method !== "POST") return res.status(200).json({ ok: true });
 
   const update = req.body;
@@ -75,6 +76,10 @@ export default async function handler(req, res) {
   const chatId = msg.chat.id.toString();
   const text = msg.text || "";
   const groupName = msg.chat.title || `Group ${chatId}`;
+
+  // 🔥 DEBUG — THIS IS THE FIX
+  console.log("TEXT RECEIVED:", text);
+
 
   // --- /start ---
   if (text.startsWith("/start")) {
@@ -117,7 +122,7 @@ export default async function handler(req, res) {
     await sendMessage(chatId, out);
   }
 
-  // --- /city & /city@BotName ---
+  // --- /city ---
   if (text === "/city" || text.startsWith("/city@")) {
 
     const { data } = await supabase
