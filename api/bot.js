@@ -15,14 +15,18 @@ async function sendMessage(chatId, text) {
     await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "Markdown"
+      })
     });
   } catch (err) {
     console.error("SendMessage Error:", err);
   }
 }
 
-// Send image message
+// Send image
 async function sendPhoto(chatId, photoUrl, caption = "") {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const url = `https://api.telegram.org/bot${token}/sendPhoto`;
@@ -34,8 +38,8 @@ async function sendPhoto(chatId, photoUrl, caption = "") {
       body: JSON.stringify({
         chat_id: chatId,
         photo: photoUrl,
-        caption: caption,
-        parse_mode: 'Markdown'
+        caption,
+        parse_mode: "Markdown"
       })
     });
   } catch (err) {
@@ -43,8 +47,9 @@ async function sendPhoto(chatId, photoUrl, caption = "") {
   }
 }
 
-// Level name + image based on bricks
+// Level images
 function getCity(bricks) {
+
   if (bricks < 10)
     return { name: "⛺ Camp", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/Camp.jpg" };
 
@@ -71,47 +76,64 @@ export default async function handler(req, res) {
   const text = msg.text || "";
   const groupName = msg.chat.title || `Group ${chatId}`;
 
-  // 1. /start
+  // --- /start ---
   if (text.startsWith("/start")) {
+
     await supabase
       .from("groups")
-      .update({ name: groupName })
-      .eq("tg_group_id", chatId);
+      .upsert(
+        { tg_group_id: chatId, name: groupName },
+        { onConflict: "tg_group_id" }
+      );
 
-    await sendMessage(chatId, `🏰 *Civilization Bot Online!*\n\nCity registered: *${groupName}*`);
+    await sendMessage(chatId,
+      `🏰 *Civilization Bot Online!*\n\nCity registered: *${groupName}*`
+    );
   }
 
-  // 2. Passive +1 brick
-  await supabase.rpc("add_brick", { group_id: chatId });
+  // --- Passive brick gain ---
+  try {
+    await supabase.rpc("add_brick", { group_id: chatId });
+  } catch (e) {
+    console.error("Brick RPC failed:", e);
+  }
 
-  // 3. /top
+  // --- /top ---
   if (text.startsWith("/top")) {
+
     const { data } = await supabase
       .from("groups")
       .select("name, bricks")
       .order("bricks", { ascending: false })
       .limit(10);
 
-    let msg = "🏆 *Top Cities*\n\n";
+    let out = "🏆 *Top Cities*\n\n";
 
     data.forEach((g, i) => {
       const lvl = getCity(g.bricks).name;
-      msg += `${i + 1}. *${g.name}*\n${lvl} • ${g.bricks} 🧱\n\n`;
+      out += `${i + 1}. *${g.name}*\n${lvl} • ${g.bricks} 🧱\n\n`;
     });
 
-    await sendMessage(chatId, msg);
+    await sendMessage(chatId, out);
   }
 
-  // 4. /city  (FIXED VERSION)
+  // --- /city & /city@BotName ---
   if (text === "/city" || text.startsWith("/city@")) {
+
     const { data } = await supabase
       .from("groups")
       .select("name, bricks")
       .eq("tg_group_id", chatId)
       .single();
 
+    if (!data) {
+      await sendMessage(chatId, "⚠️ No city found. Use /start first.");
+      return res.status(200).json({ ok: true });
+    }
+
     const city = getCity(data.bricks);
-    const caption = `🏙️ *${data.name}*\n${city.name}\nBricks: *${data.bricks}* 🧱`;
+    const caption =
+      `🏙️ *${data.name}*\n${city.name}\nBricks: *${data.bricks}* 🧱`;
 
     await sendPhoto(chatId, city.img, caption);
   }
