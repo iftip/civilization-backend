@@ -26,7 +26,7 @@ async function sendMessage(chatId, text) {
   }
 }
 
-// Send image
+// Send image message
 async function sendPhoto(chatId, photoUrl, caption = "") {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const url = `https://api.telegram.org/bot${token}/sendPhoto`;
@@ -74,10 +74,10 @@ export default async function handler(req, res) {
 
   const msg = update.message;
   const chatId = msg.chat.id.toString();
-  const text = msg.text || "";
+  const text = (msg.text || "").trim();
   const groupName = msg.chat.title || `Group ${chatId}`;
 
-  // 🔥 DEBUG LOG
+  // DEBUG
   console.log("TEXT RECEIVED:", text);
 
   // --- /start ---
@@ -122,8 +122,8 @@ export default async function handler(req, res) {
     await sendMessage(chatId, out);
   }
 
-  // --- /city ---
-  if (text === "/city" || text.startsWith("/city@")) {
+  // --- /city (works in all cases) ---
+  if (text.startsWith("/city")) {
 
     const { data } = await supabase
       .from("groups")
