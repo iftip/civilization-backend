@@ -44,7 +44,9 @@ async function sendPhoto(chatId, photoUrl, caption = "") {
 }
 
 // Level name + image based on bricks
+// Level name + image based on bricks
 function getCity(bricks) {
+  // NOTE: Using exact capitalized filenames and .jpg extension as confirmed in repo
   if (bricks < 10)
     return { name: "⛺ Camp", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/Camp.jpg" };
 
@@ -57,8 +59,10 @@ function getCity(bricks) {
   if (bricks < 500)
     return { name: "🏙️ City", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/City.jpg" };
 
+  // Placeholder for Kingdom using City image until Kingdom.jpg exists
   return { name: "🏰 Kingdom", img: "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/City.jpg" };
 }
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(200).json({ ok: true });
 
