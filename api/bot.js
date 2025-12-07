@@ -1,20 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Connect to Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Send text message
 async function sendMessage(chatId, text) {
   const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
-  await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" })
-  });
+
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "Markdown"
+      })
+    });
+  } catch (err) {
+    console.error("SendMessage Error:", err);
+  }
 }
 
-// 💥 TEMP VERSION: NO IMAGES
+// -------- LEVEL SYSTEM (Text Only) --------
 function getCity(bricks) {
   if (bricks < 10) return { name: "⛺ Camp" };
   if (bricks < 50) return { name: "🛖 Village" };
@@ -23,11 +34,14 @@ function getCity(bricks) {
   return { name: "🏰 Kingdom" };
 }
 
+// -------- BOT HANDLER --------
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(200).json({ ok: true });
+  if (req.method !== "POST")
+    return res.status(200).json({ ok: true });
 
   const update = req.body;
-  if (!update.message) return res.status(200).json({ ok: true });
+  if (!update.message)
+    return res.status(200).json({ ok: true });
 
   const msg = update.message;
   const chatId = msg.chat.id.toString();
@@ -36,20 +50,29 @@ export default async function handler(req, res) {
 
   console.log("TEXT RECEIVED:", text);
 
-  // /start
+  // ---------- /start ----------
   if (text.startsWith("/start")) {
-    await supabase.from("groups").upsert(
-      { tg_group_id: chatId, name: groupName, bricks: 0 },
-      { onConflict: "tg_group_id" }
-    );
+    await supabase
+      .from("groups")
+      .upsert(
+        { tg_group_id: chatId, name: groupName, bricks: 0 },
+        { onConflict: "tg_group_id" }
+      );
 
-    await sendMessage(chatId, `🏰 Civilization started for *${groupName}*`);
+    await sendMessage(
+      chatId,
+      `🏰 Civilization started for *${groupName}*`
+    );
   }
 
-  // add brick
-  await supabase.rpc("add_brick", { group_id: chatId });
+  // ---------- Passive Brick Gain ----------
+  try {
+    await supabase.rpc("add_brick", { group_id: chatId });
+  } catch (e) {
+    console.error("Brick RPC failed:", e);
+  }
 
-  // /top
+  // ---------- /top ----------
   if (text.startsWith("/top")) {
     const { data } = await supabase
       .from("groups")
@@ -58,13 +81,15 @@ export default async function handler(req, res) {
       .limit(10);
 
     let msg = "🏆 *Top Cities*\n\n";
+
     data.forEach((g, i) => {
       msg += `${i + 1}. *${g.name}* — ${g.bricks} bricks\n`;
     });
+
     await sendMessage(chatId, msg);
   }
 
-  // /city — NOW ONLY TEXT
+  // ---------- /city ----------
   if (text.startsWith("/city")) {
     const { data } = await supabase
       .from("groups")
@@ -77,11 +102,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    const city = getCity(data.bricks);
+    const level = getCity(data.bricks);
 
     await sendMessage(
       chatId,
-      `🏙️ *${data.name}*\nLevel: ${city.name}\nBricks: ${data.bricks}`
+      `🏙️ *${data.name}*\nLevel: ${level.name}\nBricks: ${data.bricks}`
     );
   }
 
