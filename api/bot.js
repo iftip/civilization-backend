@@ -87,5 +87,37 @@ export default async function handler(req, res) {
     await sendMessage(chatId, msg);
   }
 
+// ---------------------- /city command (pixel art) ----------------------
+if (text.startsWith('/city')) {
+  try {
+    const { data: groupRow, error } = await supabase
+      .from('groups')
+      .select('name, bricks')
+      .eq('tg_group_id', chatId.toString())
+      .single();
+
+    if (error || !groupRow) {
+      await sendMessage(chatId, "Start chatting to build your city — then use /city!");
+    } else {
+      const bricks = groupRow.bricks || 0;
+
+      let imgUrl = "https://i.imgur.com/8Qz5K0P.png"; // Camp
+      let levelLabel = "⛺ Camp";
+
+      if (bricks >= 500) { imgUrl = "https://i.imgur.com/Z9k4pLm.png"; levelLabel = "🏰 Kingdom"; }
+      else if (bricks >= 100) { imgUrl = "https://i.imgur.com/e4R3v8K.png"; levelLabel = "🏙️ City"; }
+      else if (bricks >= 50)  { imgUrl = "https://i.imgur.com/7dP9k2m.png"; levelLabel = "🏠 Town"; }
+      else if (bricks >= 10)  { imgUrl = "https://i.imgur.com/X2f3s9L.png"; levelLabel = "🛖 Village"; }
+
+      const displayName = groupRow.name || `Group ${chatId}`;
+      const caption = `🏙️ *${displayName}*\n${levelLabel}\nBricks: *${bricks}* 🧱`;
+
+      await sendPhoto(chatId, imgUrl, caption);
+    }
+  } catch (err) {
+    console.error("City command error:", err);
+  }
+}
+
   return res.status(200).json({ status: "done" });
 }
