@@ -6,189 +6,187 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Helper: Send Text
+// Send text
 async function sendMessage(chatId, text) {
   const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" })
-    });
-  } catch (err) {
-    console.error("SendMessage Error:", err);
-  }
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" })
+  });
 }
 
-// Helper: Send Photo
+// Send photo
 async function sendPhoto(chatId, photoUrl, caption = "") {
   const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`;
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption, parse_mode: "Markdown" })
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: photoUrl,
+        caption,
+        parse_mode: "Markdown"
+      })
     });
-    if (!res.ok) {
-      const text = await res.text();
-      // Only log error, fallback to text message below
-      console.error(`Telegram sendPhoto failed ${res.status}: ${text}`);
-      throw new Error("Photo failed"); 
-    }
+    if (!res.ok) throw new Error("Telegram photo failed");
   } catch (err) {
-    // Fallback: Send text if image fails
     await sendMessage(chatId, caption);
   }
 }
 
-// Helper: Get City Image
+// City system (4 images)
 function getCity(bricks) {
   const base = "https://raw.githubusercontent.com/iftip/civilization-backend/main/api/images/";
-  // Using Capitalized JPGs as confirmed working
   if (bricks < 10) return { name: "⛺ Camp", img: base + "Camp.jpg" };
   if (bricks < 50) return { name: "🛖 Village", img: base + "Village.jpg" };
   if (bricks < 100) return { name: "🏠 Town", img: base + "Town.jpg" };
-  // 100+ uses City.jpg for both City and Kingdom
   return { name: bricks < 500 ? "🏙️ City" : "🏰 Kingdom", img: base + "City.jpg" };
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(200).json({ ok: true });
-
   const update = req.body;
   if (!update?.message) return res.status(200).json({ ok: true });
 
   const msg = update.message;
   const chatId = String(msg.chat.id);
-  const rawText = (msg.text || "").trim();
-  const parts = rawText.split(/\s+/);
-  const command = parts[0]; // e.g. /city or /city@BotName
+  const raw = (msg.text || "").trim();
+  const parts = raw.split(" ");
+  const command = parts[0];
   const groupName = msg.chat.title || `Group ${chatId}`;
 
-  console.log("TEXT RECEIVED:", rawText);
+  // /start
+  if (command.startsWith("/start")) {
+    await supabase.from("groups").upsert(
+      { tg_group_id: chatId, name: groupName, bricks: 0 },
+      { onConflict: "tg_group_id" }
+    );
+    await sendMessage(chatId, `🏰 Civilization started for *${groupName}*`);
+  }
 
+  // Passive brick (uses new markets logic)
   try {
-    // --- /start ---
-    if (command === "/start" || command.startsWith("/start@")) {
-      await supabase.from("groups").upsert(
-        { tg_group_id: chatId, name: groupName, bricks: 0 },
-        { onConflict: "tg_group_id" }
+    await supabase.rpc("add_brick", { group_id: chatId });
+  } catch {}
+
+  // /top
+  if (command.startsWith("/top")) {
+    const { data } = await supabase
+      .from("groups")
+      .select("name, bricks, markets, tg_group_id")
+      .order("bricks", { ascending: false })
+      .limit(10);
+
+    let out = "🏆 *Top Cities*\n\n";
+    data?.forEach((g, i) => {
+      const m = g.markets ? ` (+${g.markets}🏪)` : "";
+      out += `${i + 1}. *${g.name}* — ${g.bricks} 🧱${m}\n🆔 \`${g.tg_group_id}\`\n\n`;
+    });
+
+    await sendMessage(chatId, out);
+  }
+
+  // /city
+  if (command.startsWith("/city")) {
+    const { data } = await supabase
+      .from("groups")
+      .select("name, bricks, markets")
+      .eq("tg_group_id", chatId)
+      .single();
+
+    if (!data) return sendMessage(chatId, "⚠️ No city found. Use /start.");
+
+    const city = getCity(data.bricks);
+    const mk = data.markets ? `\n🏪 Markets: *${data.markets}* (+${data.markets * 2}/msg)` : "";
+    const caption = `🏙️ *${data.name}*\n${city.name}\nBricks: *${data.bricks}* 🧱${mk}`;
+    await sendPhoto(chatId, city.img, caption);
+  }
+
+  // /buy market
+  if (command.startsWith("/buy")) {
+    const item = parts[1];
+
+    if (item !== "market") {
+      await sendMessage(chatId,
+        "🛒 *Marketplace*\n\n" +
+        "🏪 *Market* — 500 🧱\n" +
+        "_Generates +2 extra bricks per message_\n\n" +
+        "Use: `/buy market`"
       );
-      await sendMessage(chatId, `🏰 Civilization started for *${groupName}*`);
+      return;
     }
 
-    // --- Passive Brick ---
-    try {
-      await supabase.rpc("add_brick", { group_id: chatId });
-    } catch (e) {
-      console.error("Passive brick error:", e);
+    const { data: grp } = await supabase
+      .from("groups")
+      .select("bricks, markets")
+      .eq("tg_group_id", chatId)
+      .single();
+
+    if (!grp) return sendMessage(chatId, "❌ Use /start first.");
+
+    if (grp.bricks < 500)
+      return sendMessage(chatId, `❌ Not enough bricks.\nYou need 500, you have ${grp.bricks}.`);
+
+    await supabase.from("groups").update({
+      bricks: grp.bricks - 500,
+      markets: (grp.markets || 0) + 1
+    }).eq("tg_group_id", chatId);
+
+    await sendMessage(chatId, `✅ *Market Built!*\nIncome increased by +2/msg.`);
+  }
+
+  // /attack <ID>
+  if (command.startsWith("/attack")) {
+    const targetId = parts[1];
+
+    if (!targetId)
+      return sendMessage(chatId, "⚔️ Usage: `/attack <ID>`\n(Get ID from /top)");
+
+    if (targetId === chatId)
+      return sendMessage(chatId, "❌ You cannot attack yourself.");
+
+    const { data: attacker } = await supabase
+      .from("groups")
+      .select("name, bricks, last_attack")
+      .eq("tg_group_id", chatId)
+      .single();
+
+    const { data: defender } = await supabase
+      .from("groups")
+      .select("name, bricks")
+      .eq("tg_group_id", targetId)
+      .single();
+
+    if (!attacker) return sendMessage(chatId, "❌ Use /start first.");
+    if (!defender) return sendMessage(chatId, "❌ Target does not exist.");
+
+    // Cooldown 60s
+    const now = Date.now();
+    if (attacker.last_attack && now - attacker.last_attack < 60000) {
+      const wait = Math.ceil((60000 - (now - attacker.last_attack)) / 1000);
+      return sendMessage(chatId, `⌛ Wait *${wait}s* to attack again.`);
     }
 
-    // --- /top (With IDs for attacking) ---
-    if (command === "/top" || command.startsWith("/top@")) {
-      const { data, error } = await supabase
-        .from("groups")
-        .select("name, bricks, tg_group_id")
-        .order("bricks", { ascending: false })
-        .limit(10);
+    const steal = Math.max(1, Math.floor(defender.bricks * 0.10));
 
-      if (error) {
-        await sendMessage(chatId, "Could not fetch leaderboard.");
-      } else {
-        let out = "🏆 *Top Cities*\n(Copy ID to attack)\n\n";
-        (data || []).forEach((g, i) => {
-          out += `${i + 1}. *${g.name || 'Unknown'}* — ${g.bricks} 🧱\n🆔 \`${g.tg_group_id}\`\n\n`;
-        });
-        await sendMessage(chatId, out);
-      }
-    }
+    await supabase.from("groups").update({
+      bricks: defender.bricks - steal
+    }).eq("tg_group_id", targetId);
 
-    // --- /city ---
-    if (command === "/city" || command.startsWith("/city@")) {
-      const { data } = await supabase
-        .from("groups")
-        .select("name, bricks")
-        .eq("tg_group_id", chatId)
-        .single();
+    await supabase.from("groups").update({
+      bricks: attacker.bricks + steal,
+      last_attack: now
+    }).eq("tg_group_id", chatId);
 
-      if (!data) {
-        await sendMessage(chatId, "⚠️ No city found. Use /start first.");
-      } else {
-        const city = getCity(data.bricks || 0);
-        const caption = `🏙️ *${data.name || groupName}*\n${city.name}\nBricks: *${data.bricks || 0}* 🧱`;
-        await sendPhoto(chatId, city.img, caption);
-      }
-    }
+    await sendMessage(chatId,
+      `⚔️ *Victory!*\nYou stole *${steal} bricks* from *${defender.name}*!`
+    );
 
-    // --- /attack (WAR MODULE) ---
-    if (command === "/attack" || command.startsWith("/attack@")) {
-      const targetId = parts[1];
-
-      // 1. Validate Input
-      if (!targetId) {
-        await sendMessage(chatId, "⚔️ **War System**\nUsage: `/attack <TargetID>`\n(Get IDs from /top)");
-        return res.status(200).json({ ok: true });
-      }
-      if (targetId === chatId) {
-        await sendMessage(chatId, "❌ You cannot attack yourself.");
-        return res.status(200).json({ ok: true });
-      }
-
-      // 2. Fetch Attacker & Defender
-      // We try to select 'last_attack'. If column missing, Supabase ignores it silently usually.
-      const { data: attacker } = await supabase
-        .from("groups")
-        .select("name, bricks, last_attack")
-        .eq("tg_group_id", chatId)
-        .single();
-
-      const { data: defender } = await supabase
-        .from("groups")
-        .select("name, bricks")
-        .eq("tg_group_id", targetId)
-        .single();
-
-      if (!attacker) return sendMessage(chatId, "❌ You must /start first.");
-      if (!defender) return sendMessage(chatId, "❌ Target group not found.");
-
-      // 3. Cooldown Check (1 minute)
-      const now = Date.now();
-      if (attacker.last_attack) {
-        const diff = now - attacker.last_attack;
-        if (diff < 60000) { // 60 seconds
-          const waitSecs = Math.ceil((60000 - diff) / 1000);
-          await sendMessage(chatId, `⌛ Troops are resting. Wait **${waitSecs}s**.`);
-          return res.status(200).json({ ok: true });
-        }
-      }
-
-      // 4. Calculate Battle (Steal 10%)
-      const steal = Math.max(1, Math.floor(defender.bricks * 0.10));
-
-      // 5. Update Database
-      await supabase.from("groups")
-        .update({ bricks: defender.bricks - steal })
-        .eq("tg_group_id", targetId);
-
-      // Try to update last_attack. If column missing, it might error, so we catch it.
-      try {
-        await supabase.from("groups")
-          .update({ bricks: attacker.bricks + steal, last_attack: now })
-          .eq("tg_group_id", chatId);
-      } catch (err) {
-        // Fallback: update bricks only (if no last_attack column)
-        await supabase.from("groups")
-          .update({ bricks: attacker.bricks + steal })
-          .eq("tg_group_id", chatId);
-      }
-
-      // 6. Notify Results
-      await sendMessage(chatId, `⚔️ *Victory!*\nYou stole *${steal} bricks* from *${defender.name}*!`);
-      await sendMessage(targetId, `⚠️ **Under Attack!**\n*${attacker.name}* stole *${steal} bricks* from you!`);
-    }
-
-  } catch (fatal) {
-    console.error("Handler Fatal Error:", fatal);
+    await sendMessage(targetId,
+      `⚠️ *Your city was attacked by ${attacker.name}!*`
+    );
   }
 
   return res.status(200).json({ ok: true });
