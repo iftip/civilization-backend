@@ -46,9 +46,21 @@ function getCity(bricks) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(200).json({ ok: true });
+
+  if (req.method !== "POST")
+    return res.status(200).json({ ok: true });
+
   const update = req.body;
-  if (!update?.message) return res.status(200).json({ ok: true });
+  if (!update?.message)
+    return res.status(200).json({ ok: true });
+
+  // ⚡ FIX FOR SLOWNESS + DUPLICATE SPAM
+  // Telegram stops retrying after this instant response.
+  res.status(200).json({ ok: true });
+
+  // ------------------------------------------------------
+  // 🚀 All game logic continues AFTER Telegram is satisfied
+  // ------------------------------------------------------
 
   const msg = update.message;
   const chatId = String(msg.chat.id);
@@ -188,6 +200,4 @@ export default async function handler(req, res) {
       `⚠️ *Your city was attacked by ${attacker.name}!*`
     );
   }
-
-  return res.status(200).json({ ok: true });
 }
