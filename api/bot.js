@@ -8,7 +8,7 @@ const supabase = createClient(
 
 // Helper to send messages
 async function sendMessage(chatId, text) {
-  const token = process.env.8054089265:AAFkZZ_WRzB21LpENZ0WZ8PNDb4zmkyvYEk;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
   try {
@@ -42,9 +42,8 @@ export default async function handler(req, res) {
   const text = message.text || "";
   const groupTitle = message.chat.title || `Group ${chatId}`;
 
-  // 1. /start Command (Updates Name & Initializes)
+  // 1. /start Command
   if (text.startsWith('/start')) {
-    // Update the group name in the database
     await supabase
       .from('groups')
       .update({ name: groupTitle })
@@ -54,7 +53,6 @@ export default async function handler(req, res) {
   }
 
   // 2. Add Brick (Passive)
-  // We call the SQL function for speed
   try {
     const { error } = await supabase.rpc('add_brick', { group_id: chatId.toString() });
     if (error) console.error("Add Brick Error:", error);
@@ -62,14 +60,12 @@ export default async function handler(req, res) {
     console.error("Passive Brick Error:", err);
   }
 
-  // 3. /top Leaderboard (Now with Names & Emojis!)
+  // 3. Leaderboard
   if (text.startsWith('/top') || text.startsWith('/leaderboard')) {
-    // First, verify/update the name of the current group requesting the top list
-    // This ensures at least the current group name is always fresh
     await supabase
-       .from('groups')
-       .update({ name: groupTitle })
-       .eq('tg_group_id', chatId.toString());
+      .from('groups')
+      .update({ name: groupTitle })
+      .eq('tg_group_id', chatId.toString());
 
     const { data: groups } = await supabase
       .from('groups')
@@ -87,6 +83,7 @@ export default async function handler(req, res) {
     } else {
       msg += "_No civilizations found yet._";
     }
+
     await sendMessage(chatId, msg);
   }
 
