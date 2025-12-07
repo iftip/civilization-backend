@@ -77,9 +77,8 @@ export default async function handler(req, res) {
   const text = msg.text || "";
   const groupName = msg.chat.title || `Group ${chatId}`;
 
-  // 🔥 DEBUG — THIS IS THE FIX
+  // 🔥 DEBUG LOG
   console.log("TEXT RECEIVED:", text);
-
 
   // --- /start ---
   if (text.startsWith("/start")) {
@@ -87,11 +86,12 @@ export default async function handler(req, res) {
     await supabase
       .from("groups")
       .upsert(
-        { tg_group_id: chatId, name: groupName },
+        { tg_group_id: chatId, name: groupName, bricks: 0 },
         { onConflict: "tg_group_id" }
       );
 
-    await sendMessage(chatId,
+    await sendMessage(
+      chatId,
       `🏰 *Civilization Bot Online!*\n\nCity registered: *${groupName}*`
     );
   }
